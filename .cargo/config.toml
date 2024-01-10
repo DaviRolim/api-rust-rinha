@@ -1,0 +1,5 @@
+# Environments variables for all `cargo ...` commands.
+[env]
+
+# Database
+DATABASE_URL = "postgres://admin:admin@localhost:5432/rinha"
