@@ -18,7 +18,8 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .min_connections(5)
+        .max_connections(100)
         .connect(&config().database_url)
         .await
         .unwrap_or_else(|ex| panic!("Failed to connect to Postgres: {ex:?}"));

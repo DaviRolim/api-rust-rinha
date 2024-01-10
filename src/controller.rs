@@ -18,7 +18,7 @@ use axum::{
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-use sqlx::{postgres::PgRow, FromRow, Row};
+use sqlx::FromRow;
 use uuid::Uuid; // Import NaiveDate from chrono crate
 
 use crate::AppState;
@@ -61,7 +61,7 @@ pub struct CriarPessoaDTO {
 
 #[derive(Debug, Deserialize, Serialize, FromRow)] // TODO consider using query_as to avoid the impl boilerplate, I'm not using because it breaks for creating user, I should have something different to create user
 pub struct PessoaDTO {
-    pub id: String,
+    pub id: Uuid,
     pub apelido: String,
     pub nome: String,
     pub nascimento: String,
@@ -131,51 +131,22 @@ impl IntoResponse for ApiError {
     }
 }
 
-impl PessoaDTO {
-    pub fn from(row: &PgRow) -> Self {
-        // println!("{:?}", &row.columns());
-        let string_stack: Option<String> = match row.try_get::<String, _>(4) {
-            Ok(stack) => Some(stack),
-            Err(_) => None,
-        };
-        // Commit this version then use row.get::<Vec<String>, _>(4) instead of the match above
-        // TODO remove this as this is only useful when creating a user and I don't need to return a body when creating a user
-        let stack = match string_stack {
-            None => Some(row.get::<Vec<String>, _>(4)),
-            Some(string_stack) => {
-                if string_stack.is_empty() {
-                    None
-                } else {
-                    Some(string_stack.split(" | ").map(|s| s.to_string()).collect())
-                }
-            }
-        };
-
-        let nascimento = row.get::<NaiveDate, _>(3).to_string();
-
-        let id = row.get::<Uuid, _>(0).to_string();
-        Self {
-            id,
-            apelido: row.get(1),
-            nome: row.get(2),
-            nascimento,
-            stack,
-        }
-    }
-}
 // Start Region: Handlers
 pub async fn get_user(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<ApiResponse> {
     let uuid = Uuid::parse_str(&id).map_err(|_| StatusCode::NOT_FOUND)?;
-    let row = sqlx::query("SELECT id, nickname, name, birthday, string_to_array(Stack, ' | ') as stack FROM PERSON WHERE ID = $1")
+    let row = sqlx::query_as::<_, PessoaDTO>("SELECT id, nickname as apelido, name as nome, TO_CHAR(birthday, 'YYYY-MM-DD') as nascimento, string_to_array(Stack, ' | ') as stack FROM PERSON WHERE ID = $1")
         .bind(uuid)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+        .map_err(|err| {
+            println!("{:?}", &err);
+            StatusCode::NOT_FOUND
+        })?;
 
-    Ok(ApiResponse::Ok(Json(PessoaDTO::from(&row)).into_response()))
+    Ok(ApiResponse::Ok(Json(row).into_response()))
 }
 
 pub async fn create_user(
@@ -216,14 +187,14 @@ pub async fn get_pessoas_by_search_term(
 ) -> Result<ApiResponse> {
     let term = term.t.to_owned();
     // TODO string_to_array might be slower than handling this on the rust side
-    let rows: Vec<PessoaDTO> = sqlx::query("SELECT id, nickname, name, birthday, string_to_array(Stack, ' | ') as stack FROM PERSON WHERE search ilike '%' || $1 || '%' limit 50")
+    let rows: Vec<PessoaDTO> = sqlx::query_as("SELECT id, nickname as apelido, name as nome, TO_CHAR(birthday, 'YYYY-MM-DD') as nascimento, string_to_array(Stack, ' | ') as stack FROM PERSON WHERE search ilike '%' || $1 || '%' limit 50")
             .bind(term)
             .fetch_all(&state.db)
             .await
-            .map_err(|_| StatusCode::NOT_FOUND)?
-            .iter_mut()
-            .map(|row| PessoaDTO::from(&row))
-            .collect();
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+    // .iter_mut()
+    // .map(|row| PessoaDTO::from(&row))
+    // .collect();
 
     Ok(ApiResponse::Ok(Json(rows).into_response()))
 }
