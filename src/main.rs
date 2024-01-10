@@ -33,6 +33,9 @@ async fn main() {
         )
         .with_state(state.clone());
     // Start Server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let app_port = &config().app_port;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{app_port}"))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }

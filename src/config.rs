@@ -9,12 +9,14 @@ pub fn config() -> &'static Config {
 }
 pub struct Config {
     pub database_url: String,
+    pub app_port: String,
 }
 
 impl Config {
     fn load_from_env() -> Result<Config> {
         Ok(Config {
             database_url: get_env("DATABASE_URL")?,
+            app_port: get_env("APP_PORT")?,
         })
     }
 }
