@@ -19,7 +19,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use sqlx::FromRow;
-use uuid::Uuid; // Import NaiveDate from chrono crate
+use uuid::Uuid;
 
 use crate::AppState;
 
@@ -29,12 +29,10 @@ pub struct PessoaQuery {
     // search [t]erm
     t: String,
 }
-// We derive `thiserror::Error`
 #[allow(non_camel_case_types)]
 #[derive(Debug, Error)]
 pub enum ApiError {
     // The `#[from]` attribute generates `From<JsonRejection> for ApiError`
-    // implementation. See `thiserror` docs for more information
     #[error(transparent)]
     JsonExtractorRejection(#[from] JsonRejection),
     // Default Errors
@@ -59,7 +57,7 @@ pub struct CriarPessoaDTO {
     pub stack: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, FromRow)] // TODO consider using query_as to avoid the impl boilerplate, I'm not using because it breaks for creating user, I should have something different to create user
+#[derive(Debug, Deserialize, Serialize, FromRow)]
 pub struct PessoaDTO {
     pub id: Uuid,
     pub apelido: String,
@@ -91,7 +89,6 @@ impl From<StatusCode> for ApiError {
         }
     }
 }
-// We implement `IntoResponse` so ApiError can be used as a response
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let payload = json!({
@@ -172,7 +169,6 @@ pub async fn create_user(
     .bind(stack)
     .fetch_one(&state.db)
     .await
-    // .map(|row| PessoaDTO::from(&row))
     .map_err(|_| StatusCode::UNPROCESSABLE_ENTITY)?;
 
     Ok(ApiResponse::Created(
@@ -186,15 +182,11 @@ pub async fn get_pessoas_by_search_term(
     term: Query<PessoaQuery>,
 ) -> Result<ApiResponse> {
     let term = term.t.to_owned();
-    // TODO string_to_array might be slower than handling this on the rust side
     let rows: Vec<PessoaDTO> = sqlx::query_as("SELECT id, nickname as apelido, name as nome, TO_CHAR(birthday, 'YYYY-MM-DD') as nascimento, string_to_array(Stack, ' | ') as stack FROM PERSON WHERE search ilike '%' || $1 || '%' limit 50")
             .bind(term)
             .fetch_all(&state.db)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
-    // .iter_mut()
-    // .map(|row| PessoaDTO::from(&row))
-    // .collect();
 
     Ok(ApiResponse::Ok(Json(rows).into_response()))
 }
